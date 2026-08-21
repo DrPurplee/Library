@@ -1,6 +1,6 @@
 --[[
     DrPurplee UI Library
-    Version: 0.2.1
+    Version: 0.2.2
 
     GitHub:
     https://github.com/DrPurplee/Library
@@ -10,7 +10,7 @@
 ]]
 
 local Library = {
-    Version = "0.2.1",
+    Version = "0.2.2",
     Windows = {},
 }
 
@@ -21,17 +21,91 @@ local UserInputService = game:GetService("UserInputService")
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 
---// Lucide icons
--- Tabs use real square ImageLabels instead of Unicode/text symbols.
-local Lucide = nil
+--// DrPurplee icon pack
+-- Loaded directly from our GitHub repository.
+local Icons = {}
 
 pcall(function()
-    Lucide = loadstring(
-        game:HttpGet(
-            "https://gitlab.com/upio/lucide-roblox-direct/-/raw/main/source.lua"
-        )
-    )()
+    local source = game:HttpGet(
+        "https://raw.githubusercontent.com/DrPurplee/Library/refs/heads/main/icons"
+    )
+
+    local loader = loadstring(source)
+
+    if loader then
+        local result = loader()
+
+        if type(result) == "table" then
+            Icons = result
+        end
+    end
 end)
+
+-- The icon pack uses SF-Symbol-style/camelCase names while scripts such
+-- as ASTRA use familiar Lucide-style names. These aliases bridge both APIs.
+local IconAliases = {
+    ["home"] = "house",
+    ["move"] = "figureWalk",
+    ["map-pin"] = "mappin",
+    ["car"] = "car",
+    ["users"] = "person2",
+    ["eye"] = "eye",
+    ["crosshair"] = "dotCrosshair",
+    ["skull"] = "exclamationmarkTriangle",
+}
+
+-- Built-in fallback for the ASTRA tabs. This means those eight icons still
+-- work even if the remote icons file temporarily fails to download.
+local BuiltInIcons = {
+    ["house"] = "rbxassetid://137977066267668",
+    ["figureWalk"] = "rbxassetid://79511822122227",
+    ["mappin"] = "rbxassetid://121615146959714",
+    ["car"] = "rbxassetid://128495454882226",
+    ["person2"] = "rbxassetid://112399905717309",
+    ["eye"] = "rbxassetid://111055543166389",
+    ["dotCrosshair"] = "rbxassetid://111411956958702",
+    ["exclamationmarkTriangle"] = "rbxassetid://107822175160368",
+}
+
+local function normalizeIconName(name)
+    name = tostring(name or "")
+
+    -- First use an explicit alias.
+    if IconAliases[name] then
+        return IconAliases[name]
+    end
+
+    -- Convert names such as "arrow-left" -> "arrowLeft".
+    local camel =
+        name:gsub(
+            "%-([%w])",
+            function(character)
+                return string.upper(character)
+            end
+        )
+
+    if Icons[camel] or BuiltInIcons[camel] then
+        return camel
+    end
+
+    return name
+end
+
+local function resolveIconAsset(name)
+    local key = normalizeIconName(name)
+
+    local asset =
+        Icons[key]
+        or BuiltInIcons[key]
+
+    if type(asset) ~= "string"
+        or asset == ""
+    then
+        return nil, key
+    end
+
+    return asset, key
+end
 
 --// Classes
 
@@ -827,25 +901,19 @@ function Window:Tab(options)
             or "circle"
         )
 
-    local iconData = nil
+    local iconImage, resolvedIconName =
+        resolveIconAsset(
+            iconName
+        )
 
-    if Lucide
-        and type(Lucide.GetAsset) == "function"
-    then
-        local success, result =
-            pcall(function()
-                return Lucide.GetAsset(
-                    iconName
-                )
-            end)
-
-        if success
-            and type(result) == "table"
-            and type(result.Url) == "string"
-        then
-            iconData = result
-        end
-    end
+    local iconData =
+        iconImage
+        and {
+            Url = iconImage,
+            ImageRectOffset = Vector2.zero,
+            ImageRectSize = Vector2.zero,
+        }
+        or nil
 
     -- Rounded-square icon tile, matching the compact sidebar look.
     local iconBox = new(
@@ -957,7 +1025,7 @@ function Window:Tab(options)
         }
     )
 
-    -- Fallback only if Lucide failed to load/resolve.
+    -- Fallback only for an icon name that does not exist in our pack.
     if not iconData then
         label(
             iconBox,
@@ -1102,7 +1170,8 @@ function Window:Tab(options)
                 iconGlow,
 
             IconName =
-                iconName,
+                resolvedIconName
+                or iconName,
 
             TitleLabel =
                 titleLabel,
