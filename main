@@ -1,6 +1,6 @@
 --[[
     DrPurplee UI Library
-    Version: 0.2.0
+    Version: 0.2.1
 
     GitHub:
     https://github.com/DrPurplee/Library
@@ -10,7 +10,7 @@
 ]]
 
 local Library = {
-    Version = "0.2.0",
+    Version = "0.2.1",
     Windows = {},
 }
 
@@ -19,6 +19,19 @@ local Library = {
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+
+--// Lucide icons
+-- Tabs use real square ImageLabels instead of Unicode/text symbols.
+local Lucide = nil
+
+pcall(function()
+    Lucide = loadstring(
+        game:HttpGet(
+            "https://gitlab.com/upio/lucide-roblox-direct/-/raw/main/source.lua"
+        )
+    )()
+end)
 
 --// Classes
 
@@ -308,6 +321,30 @@ local function safeCallback(callback, ...)
     end)
 end
 
+
+local function formatSessionDuration(seconds)
+    seconds = math.max(0, math.floor(seconds))
+
+    local hours = math.floor(seconds / 3600)
+    local minutes = math.floor((seconds % 3600) / 60)
+    local remainingSeconds = seconds % 60
+
+    if hours > 0 then
+        return string.format(
+            "%d:%02d:%02d",
+            hours,
+            minutes,
+            remainingSeconds
+        )
+    end
+
+    return string.format(
+        "%d:%02d",
+        minutes,
+        remainingSeconds
+    )
+end
+
 --// Window Internal
 
 function Window:_track(connection)
@@ -432,16 +469,67 @@ function Window:_styleTab(tab, selected)
         }
     )
 
-    tween(
-        tab.IconLabel,
-        0.14,
-        {
-            TextColor3 =
-                tab.Selected
-                and self.Theme.Text
-                or self.Theme.MutedText,
-        }
-    )
+    -- Real Lucide icon.
+    if tab.IconLabel then
+        tween(
+            tab.IconLabel,
+            0.14,
+            {
+                ImageColor3 =
+                    tab.Selected
+                    and self.Theme.Accent
+                    or self.Theme.MutedText,
+            }
+        )
+    end
+
+    -- Small rounded-square tile around the icon.
+    if tab.IconBox then
+        tween(
+            tab.IconBox,
+            0.14,
+            {
+                BackgroundColor3 =
+                    tab.Selected
+                    and self.Theme.SurfacePressed
+                    or self.Theme.Surface,
+            }
+        )
+    end
+
+    if tab.IconStroke then
+        tween(
+            tab.IconStroke,
+            0.14,
+            {
+                Color =
+                    tab.Selected
+                    and self.Theme.Accent
+                    or self.Theme.Border,
+
+                Transparency =
+                    tab.Selected
+                    and 0.35
+                    or 0.72,
+            }
+        )
+    end
+
+    if tab.IconGlow then
+        tab.IconGlow.Color = self.Theme.Accent
+        tab.IconGlow.Enabled = tab.Selected
+
+        tween(
+            tab.IconGlow,
+            0.14,
+            {
+                Transparency =
+                    tab.Selected
+                    and 0.72
+                    or 1,
+            }
+        )
+    end
 
     tween(
         tab.Indicator,
@@ -732,41 +820,173 @@ function Window:Tab(options)
         2
     )
 
-    local iconLabel = label(
-        tabButton,
+    local iconName =
+        tostring(
+            options.Icon
+            or options.IconText
+            or "circle"
+        )
+
+    local iconData = nil
+
+    if Lucide
+        and type(Lucide.GetAsset) == "function"
+    then
+        local success, result =
+            pcall(function()
+                return Lucide.GetAsset(
+                    iconName
+                )
+            end)
+
+        if success
+            and type(result) == "table"
+            and type(result.Url) == "string"
+        then
+            iconData = result
+        end
+    end
+
+    -- Rounded-square icon tile, matching the compact sidebar look.
+    local iconBox = new(
+        "Frame",
         {
-            Name = "Icon",
+            Name = "IconBox",
 
-            Text =
-                tostring(
-                    options.IconText
-                    or "•"
-                ),
+            BackgroundColor3 =
+                self.Theme.Surface,
 
-            TextColor3 =
-                self.Theme.MutedText,
-
-            Font =
-                Enum.Font.GothamBold,
-
-            TextSize = 14,
-
-            TextXAlignment =
-                Enum.TextXAlignment.Center,
+            BorderSizePixel = 0,
 
             Position =
                 UDim2.fromOffset(
-                    8,
-                    0
+                    6,
+                    4
                 ),
 
             Size =
                 UDim2.fromOffset(
                     24,
-                    32
+                    24
                 ),
+
+            Parent =
+                tabButton,
         }
     )
+
+    corner(
+        iconBox,
+        7
+    )
+
+    local iconStroke = stroke(
+        iconBox,
+        self.Theme.Border,
+        1,
+        0.72
+    )
+
+    local iconGlow = shadow(
+        iconBox,
+        self.Theme.Accent,
+        1,
+        6,
+        UDim2.new(),
+        UDim2.fromOffset(
+            1,
+            1
+        )
+    )
+
+    if iconGlow then
+        iconGlow.Enabled = false
+    end
+
+    local iconLabel = new(
+        "ImageLabel",
+        {
+            Name = "Icon",
+
+            AnchorPoint =
+                Vector2.new(
+                    0.5,
+                    0.5
+                ),
+
+            BackgroundTransparency = 1,
+            BorderSizePixel = 0,
+
+            Image =
+                iconData
+                and iconData.Url
+                or "",
+
+            ImageRectOffset =
+                iconData
+                and iconData.ImageRectOffset
+                or Vector2.zero,
+
+            ImageRectSize =
+                iconData
+                and iconData.ImageRectSize
+                or Vector2.zero,
+
+            ImageColor3 =
+                self.Theme.MutedText,
+
+            Position =
+                UDim2.fromScale(
+                    0.5,
+                    0.5
+                ),
+
+            ScaleType =
+                Enum.ScaleType.Fit,
+
+            Size =
+                UDim2.fromOffset(
+                    16,
+                    16
+                ),
+
+            ZIndex = 3,
+
+            Parent =
+                iconBox,
+        }
+    )
+
+    -- Fallback only if Lucide failed to load/resolve.
+    if not iconData then
+        label(
+            iconBox,
+            {
+                Name = "FallbackIcon",
+
+                Text = "•",
+
+                Font =
+                    Enum.Font.GothamBold,
+
+                TextColor3 =
+                    self.Theme.MutedText,
+
+                TextSize = 13,
+
+                TextXAlignment =
+                    Enum.TextXAlignment.Center,
+
+                Size =
+                    UDim2.fromScale(
+                        1,
+                        1
+                    ),
+
+                ZIndex = 3,
+            }
+        )
+    end
 
     local titleLabel = label(
         tabButton,
@@ -788,14 +1008,14 @@ function Window:Tab(options)
 
             Position =
                 UDim2.fromOffset(
-                    35,
+                    38,
                     0
                 ),
 
             Size =
                 UDim2.new(
                     1,
-                    -43,
+                    -46,
                     1,
                     0
                 ),
@@ -871,6 +1091,18 @@ function Window:Tab(options)
 
             IconLabel =
                 iconLabel,
+
+            IconBox =
+                iconBox,
+
+            IconStroke =
+                iconStroke,
+
+            IconGlow =
+                iconGlow,
+
+            IconName =
+                iconName,
 
             TitleLabel =
                 titleLabel,
@@ -2413,6 +2645,39 @@ function Library:CreateWindow(options)
                     15
                 ),
         }
+    )
+
+    -- Session timer (time since this UI/script was started).
+    -- FPS intentionally stays removed.
+    local sessionStartedAt =
+        os.clock()
+
+    footerUsername.Text =
+        username
+        .. "  •  0:00"
+
+    window.SessionTime =
+        footerUsername
+
+    window:_track(
+        RunService.Heartbeat:Connect(function()
+            if window.Destroyed
+                or not footerUsername.Parent
+            then
+                return
+            end
+
+            local elapsed =
+                os.clock()
+                - sessionStartedAt
+
+            footerUsername.Text =
+                username
+                .. "  •  "
+                .. formatSessionDuration(
+                    elapsed
+                )
+        end)
     )
 
     window.FooterFrame =
