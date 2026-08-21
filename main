@@ -1,6 +1,6 @@
 --[[
     DrPurplee UI Library
-    Version: 0.2.2
+    Version: 0.2.3
 
     GitHub:
     https://github.com/DrPurplee/Library
@@ -10,7 +10,7 @@
 ]]
 
 local Library = {
-    Version = "0.2.2",
+    Version = "0.2.3",
     Windows = {},
 }
 
@@ -141,7 +141,7 @@ local DefaultTheme = {
     MutedText = Color3.fromRGB(151, 151, 154),
     SubtleText = Color3.fromRGB(105, 105, 108),
 
-    Accent = Color3.fromRGB(112, 210, 76),
+    Accent = Color3.fromRGB(219, 53, 252),
 
     Shadow = Color3.fromRGB(0, 0, 0),
 
@@ -752,6 +752,12 @@ function Window:Minimize(state)
 
     self.RestoreBar.Visible =
         self.Minimized
+
+    if self.ResizeLayer then
+        self.ResizeLayer.Visible =
+            not self.Minimized
+            and self.Resizable
+    end
 
     if self.Minimized then
         tween(
@@ -2054,8 +2060,8 @@ function Library:CreateWindow(options)
         and options.Size
 
         or UDim2.fromOffset(
-            650,
-            430
+            760,
+            500
         )
 
     local position =
@@ -2067,6 +2073,31 @@ function Library:CreateWindow(options)
         or UDim2.fromScale(
             0.5,
             0.5
+        )
+
+    local resizable =
+        options.Resizable ~= false
+
+    local minSize =
+        typeof(options.MinSize)
+            == "Vector2"
+
+        and options.MinSize
+
+        or Vector2.new(
+            560,
+            360
+        )
+
+    local maxSize =
+        typeof(options.MaxSize)
+            == "Vector2"
+
+        and options.MaxSize
+
+        or Vector2.new(
+            1200,
+            850
         )
 
     local parent =
@@ -2227,6 +2258,15 @@ function Library:CreateWindow(options)
 
             Position =
                 position,
+
+            Resizable =
+                resizable,
+
+            MinSize =
+                minSize,
+
+            MaxSize =
+                maxSize,
 
             Tabs = {},
 
@@ -3193,6 +3233,378 @@ function Library:CreateWindow(options)
             window:SetVisible(
                 false
             )
+        end)
+    )
+
+    --// Window Resizing
+    -- Drag any side or corner of the menu to resize it.
+    -- The latest size is stored in window.Size so minimizing/restoring keeps it.
+
+    local resizeLayer = new(
+        "Frame",
+        {
+            Name = "ResizeLayer",
+
+            Active = false,
+
+            BackgroundTransparency = 1,
+
+            BorderSizePixel = 0,
+
+            Size =
+                UDim2.fromScale(
+                    1,
+                    1
+                ),
+
+            Visible =
+                resizable,
+
+            ZIndex = 50,
+
+            Parent =
+                root,
+        }
+    )
+
+    window.ResizeLayer =
+        resizeLayer
+
+    local resizeInput =
+        nil
+
+    local resizeDirection =
+        nil
+
+    local resizeStartMouse =
+        nil
+
+    local resizeStartSize =
+        nil
+
+    local resizeStartPosition =
+        nil
+
+    local function createResizeHandle(
+        name,
+        direction,
+        positionValue,
+        sizeValue
+    )
+        local handle = new(
+            "Frame",
+            {
+                Name =
+                    name,
+
+                Active =
+                    true,
+
+                BackgroundTransparency =
+                    1,
+
+                BorderSizePixel =
+                    0,
+
+                Position =
+                    positionValue,
+
+                Size =
+                    sizeValue,
+
+                ZIndex =
+                    51,
+
+                Parent =
+                    resizeLayer,
+            }
+        )
+
+        window:_track(
+            handle.InputBegan:Connect(function(input)
+                if window.Minimized
+                    or not window.Resizable
+                    or not isPointerInput(input)
+                then
+                    return
+                end
+
+                resizeInput =
+                    input
+
+                resizeDirection =
+                    direction
+
+                resizeStartMouse =
+                    input.Position
+
+                resizeStartSize =
+                    root.AbsoluteSize
+
+                resizeStartPosition =
+                    root.Position
+            end)
+        )
+
+        return handle
+    end
+
+    -- Sides
+    createResizeHandle(
+        "ResizeLeft",
+        "L",
+        UDim2.fromOffset(0, 12),
+        UDim2.new(0, 7, 1, -24)
+    )
+
+    createResizeHandle(
+        "ResizeRight",
+        "R",
+        UDim2.new(1, -7, 0, 12),
+        UDim2.new(0, 7, 1, -24)
+    )
+
+    createResizeHandle(
+        "ResizeTop",
+        "T",
+        UDim2.fromOffset(12, 0),
+        UDim2.new(1, -24, 0, 7)
+    )
+
+    createResizeHandle(
+        "ResizeBottom",
+        "B",
+        UDim2.new(0, 12, 1, -7),
+        UDim2.new(1, -24, 0, 7)
+    )
+
+    -- Corners
+    createResizeHandle(
+        "ResizeTopLeft",
+        "LT",
+        UDim2.fromOffset(0, 0),
+        UDim2.fromOffset(12, 12)
+    )
+
+    createResizeHandle(
+        "ResizeTopRight",
+        "RT",
+        UDim2.new(1, -12, 0, 0),
+        UDim2.fromOffset(12, 12)
+    )
+
+    createResizeHandle(
+        "ResizeBottomLeft",
+        "LB",
+        UDim2.new(0, 0, 1, -12),
+        UDim2.fromOffset(12, 12)
+    )
+
+    createResizeHandle(
+        "ResizeBottomRight",
+        "RB",
+        UDim2.new(1, -12, 1, -12),
+        UDim2.fromOffset(12, 12)
+    )
+
+    window:_track(
+        UserInputService.InputChanged:Connect(function(input)
+            if not resizeInput
+                or not resizeDirection
+                or not resizeStartMouse
+                or not resizeStartSize
+                or not resizeStartPosition
+            then
+                return
+            end
+
+            local mouseResize =
+                resizeInput.UserInputType
+                    == Enum.UserInputType.MouseButton1
+
+                and input.UserInputType
+                    == Enum.UserInputType.MouseMovement
+
+            local touchResize =
+                resizeInput.UserInputType
+                    == Enum.UserInputType.Touch
+
+                and input
+                    == resizeInput
+
+            if not mouseResize
+                and not touchResize
+            then
+                return
+            end
+
+            local delta =
+                input.Position
+                - resizeStartMouse
+
+            local startWidth =
+                resizeStartSize.X
+
+            local startHeight =
+                resizeStartSize.Y
+
+            local newWidth =
+                startWidth
+
+            local newHeight =
+                startHeight
+
+            local resizeLeft =
+                string.find(
+                    resizeDirection,
+                    "L",
+                    1,
+                    true
+                ) ~= nil
+
+            local resizeRight =
+                string.find(
+                    resizeDirection,
+                    "R",
+                    1,
+                    true
+                ) ~= nil
+
+            local resizeTop =
+                string.find(
+                    resizeDirection,
+                    "T",
+                    1,
+                    true
+                ) ~= nil
+
+            local resizeBottom =
+                string.find(
+                    resizeDirection,
+                    "B",
+                    1,
+                    true
+                ) ~= nil
+
+            if resizeLeft then
+                newWidth =
+                    startWidth
+                    - delta.X
+            elseif resizeRight then
+                newWidth =
+                    startWidth
+                    + delta.X
+            end
+
+            if resizeTop then
+                newHeight =
+                    startHeight
+                    - delta.Y
+            elseif resizeBottom then
+                newHeight =
+                    startHeight
+                    + delta.Y
+            end
+
+            newWidth =
+                math.clamp(
+                    newWidth,
+                    window.MinSize.X,
+                    window.MaxSize.X
+                )
+
+            newHeight =
+                math.clamp(
+                    newHeight,
+                    window.MinSize.Y,
+                    window.MaxSize.Y
+                )
+
+            local widthDifference =
+                newWidth
+                - startWidth
+
+            local heightDifference =
+                newHeight
+                - startHeight
+
+            local centerX =
+                0
+
+            local centerY =
+                0
+
+            if resizeLeft then
+                centerX =
+                    -widthDifference
+                    / 2
+            elseif resizeRight then
+                centerX =
+                    widthDifference
+                    / 2
+            end
+
+            if resizeTop then
+                centerY =
+                    -heightDifference
+                    / 2
+            elseif resizeBottom then
+                centerY =
+                    heightDifference
+                    / 2
+            end
+
+            root.Size =
+                UDim2.fromOffset(
+                    newWidth,
+                    newHeight
+                )
+
+            root.Position =
+                UDim2.new(
+                    resizeStartPosition.X.Scale,
+                    resizeStartPosition.X.Offset
+                        + centerX,
+
+                    resizeStartPosition.Y.Scale,
+                    resizeStartPosition.Y.Offset
+                        + centerY
+                )
+
+            window.Size =
+                root.Size
+
+            window.Position =
+                root.Position
+        end)
+    )
+
+    window:_track(
+        UserInputService.InputEnded:Connect(function(input)
+            if input == resizeInput
+                or (
+                    resizeInput
+                    and resizeInput.UserInputType
+                        == Enum.UserInputType.MouseButton1
+                    and input.UserInputType
+                        == Enum.UserInputType.MouseButton1
+                )
+            then
+                resizeInput =
+                    nil
+
+                resizeDirection =
+                    nil
+
+                resizeStartMouse =
+                    nil
+
+                resizeStartSize =
+                    nil
+
+                resizeStartPosition =
+                    nil
+            end
         end)
     )
 
